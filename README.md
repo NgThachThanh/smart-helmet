@@ -2,13 +2,13 @@
 
 Mũ bảo hiểm thông minh cho người đi mô tô dựa trên ESP32-S3 và FreeRTOS, tích hợp **phát hiện té ngã đa bằng chứng**, **HUD hiển thị điều hướng qua BLE** và **cảnh báo SOS tự động** kèm vị trí GPS.
 
+![Kiến trúc hệ thống](docs/overview.png)
+
 ## Thành tích
 
 - Đề tài nghiên cứu khoa học cấp trường
 - Top 20 — Cuộc thi BK Innovation 2025, Đại học Bách khoa TP.HCM
 - Bài báo được chấp nhận tại hội nghị CUTE2026: *Toward a Hybrid Efficient Edge-Host Smart Helmet System for Drowsiness Detection and Accident Verification using ESP32-S3*
-
-![Kiến trúc hệ thống](docs/overview.png)
 
 ## Tính năng
 
