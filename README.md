@@ -1,97 +1,79 @@
 # Smart Helmet — ESP32-S3
 
-An edge-based smart motorcycle helmet with **multi-evidence fall detection**, **BLE heads-up display (HUD) navigation**, and **automatic SOS alerts** — powered by an ESP32-S3 with FreeRTOS.
+Mũ bảo hiểm thông minh cho người đi mô tô dựa trên ESP32-S3 và FreeRTOS, tích hợp **phát hiện té ngã đa bằng chứng**, **HUD hiển thị điều hướng qua BLE** và **cảnh báo SOS tự động** kèm vị trí GPS.
 
-![System architecture](docs/overview.png)
+![Kiến trúc hệ thống](docs/overview.png)
 
-## Features
+## Tính năng
 
-| Feature | Description |
+| Tính năng | Mô tả |
 |---|---|
-| 🚨 Multi-evidence fall detection | MPU6050 IMU @ 100 Hz, Kalman + complementary filtering, 3-stage state machine (impact/tilt → 3 s recovery window → 10 s countdown) |
-| 📱 SOS alert | If the rider does not cancel the alert within 10 s, an SMS with a Google Maps location link is sent to pre-registered contacts via the SIM A7680C (4G) + ATGM336H GPS |
-| 🧭 HUD navigation | 0.96" OLED (SSD1306) shows turn-by-turn directions from a React Native app over BLE — street name, distance, direction icon, instruction |
-| 👁️ Vision-based drowsiness detection | YOLOv5n running on a Sipeed MaixCAM (edge AI), custom 15,000-image oblique-angle dataset, duration-based temporal filtering |
-| 🔋 Low power | 7–9 h battery life on a 2000 mAh Li-Po, < $85 total system cost |
+| Phát hiện té ngã đa bằng chứng | MPU6050 ở 100 Hz, lọc Kalman + complementary, máy trạng thái 3 tầng (va chạm/nghiêng → cửa sổ hồi phục 3 s → đếm ngược 10 s) |
+| Cảnh báo SOS | Không huỷ trong 10 s → tự động gửi SMS kèm link Google Maps tới người thân qua SIM A7680C (4G) + định vị ATGM336H |
+| HUD điều hướng | OLED 0.96" (SSD1306) hiển thị hướng dẫn từng chặng từ app React Native qua BLE — tên đường, khoảng cách, icon rẽ trái/phải |
+| Phát hiện buồn ngủ | YOLOv5n chạy trên Sipeed MaixCAM (edge AI), dataset 15.000 ảnh góc nghiêng tự thu thập, lọc thời gian theo độ dài nhắm mắt |
+| Tiết kiệm năng lượng | Pin 2000 mAh dùng 7–9 giờ, tổng chi phí hệ thống dưới 85 USD |
 
-## Hardware
+## Phần cứng
 
-| Component | Role |
+| Linh kiện | Vai trò |
 |---|---|
-| ESP32-S3 (ESP32-S3-DevKitC-1) | Main MCU — IMU sampling, BLE, HUD, FreeRTOS |
-| MPU6050 | 6-axis IMU for fall detection (I2C) |
-| SIM A7680C | 4G GSM module for SOS SMS (UART2) |
-| ATGM336H | GPS module, NMEA over UART1 |
-| 0.96" OLED SSD1306 | HUD display (I2C) |
-| Sipeed MaixCAM | Vision inference — drowsiness detection (not in this repo) |
+| ESP32-S3 (DevKitC-1) | MCU chính — đọc IMU, BLE, HUD, FreeRTOS đa nhân |
+| MPU6050 | IMU 6 trục phát hiện té ngã (I2C) |
+| SIM A7680C | Module 4G gửi SMS SOS (UART2) |
+| ATGM336H | Module GPS, xuất NMEA qua UART1 |
+| OLED 0.96" SSD1306 | Màn hình HUD (I2C) |
+| Sipeed MaixCAM | Suy luận thị giác — phát hiện buồn ngủ (không nằm trong repo này) |
 
-## How it works
+## Cách hoạt động
 
-### Fall detection (3-stage pipeline)
+### Phát hiện té ngã (3 tầng)
 
-1. **Stage 1 — Impact/tilt trigger**: resultant acceleration > ~2.5 g (threshold tunable via speed/road/factor constants) **or** helmet tilt > 60° from vertical.
-2. **Stage 2 — Recovery window (3 s)**: if tilt returns below 30° and acceleration settles back to 0.8–1.2 g, the event is discarded as a false positive (sharp braking, curb impact).
-3. **Stage 3 — Alert (10 s countdown)**: LED blinks and the countdown is printed. The rider cancels by holding the cancel button (pin 4). On timeout, the SOS task is resumed: GPS fix → SMS with `https://maps.google.com/?q=<lat>,<lon>` → suspend until next crash.
+1. **Tầng 1 — Kích hoạt**: tổng gia tốc vượt ~2,5 g (ngưỡng nhân hệ số tốc độ/đường/cách lái) **hoặc** mũ nghiêng quá 60° so với phương thẳng đứng.
+2. **Tầng 2 — Cửa sổ hồi phục (3 s)**: nếu tư thế trở lại (nghiêng dưới 30°, gia tốc ổn định 0,8–1,2 g) → sự kiện bị loại là báo động giả (phanh gấp, va ổ gà).
+3. **Tầng 3 — Cảnh báo (đếm ngược 10 s)**: LED nhấp nháy, người lái giữ nút huỷ để bỏ qua. Hết giờ: task SMS được đánh thức — chờ GPS fix rồi gửi SMS chứa `https://maps.google.com/?q=<lat>,<lon>`, sau đó tạm dừng chờ sự kiện kế tiếp.
 
-![Fall detection](docs/sos.png)
+![Thuật toán phát hiện té ngã](docs/sos.png)
 
-### HUD + BLE navigation
+### HUD + điều hướng BLE
 
-The helmet advertises BLE service `DD3F0AD1-6239-4E1F-81F1-91F6C9F01D86`. The companion React Native app writes a JSON payload (`nav`, `inst`, `dist`, `street`, `nstreet`, `dir`, `step`, `total`) to the write characteristic; the ESP32 parses it and renders it on the OLED. Vietnamese diacritics are stripped for the SSD1306's basic font.
+Mũ quảng cáo BLE service `DD3F0AD1-6239-4E1F-81F1-91F6C9F01D86`. App React Native ghi payload JSON (`nav`, `inst`, `dist`, `street`, `nstreet`, `dir`, `step`, `total`) vào write characteristic; ESP32 parse và vẽ lên OLED. Dấu tiếng Việt được lược bỏ để hiển thị với font cơ bản của SSD1306.
 
 ![HUD](docs/HUD.png)
 
-## Wiring
+## Sơ đồ đấu nối
 
-| ESP32-S3 pin | Peripheral |
+| Chân ESP32-S3 | Ngoại vi |
 |---|---|
 | 33 (SDA) / 32 (SCL) | MPU6050 + OLED (I2C) |
-| 18 (RX) / 17 (TX) | ATGM336H GPS (UART1, 9600) |
+| 18 (RX) / 17 (TX) | GPS ATGM336H (UART1, 9600) |
 | 26 (RX) / 27 (TX) | SIM A7680C (UART2, 115200) |
-| 2 | Alert LED |
-| 4 | Cancel button (INPUT_PULLUP, LOW = pressed) |
+| 2 | LED cảnh báo |
+| 4 | Nút huỷ cảnh báo (INPUT_PULLUP, LOW = nhấn) |
 
-> Configure the SOS recipient in `firmware/src/SmsGps.h` → `SOS_PHONE`.
+> Số điện thoại nhận SOS cấu hình trong `firmware/src/SmsGps.h` → `SOS_PHONE`.
 
-## Getting started
-
-```bash
-# 1. Install PlatformIO (https://platformio.org)
-pip install platformio
-
-# 2. Build
-pio run -d firmware
-
-# 3. Flash
-pio run -d firmware -t upload
-
-# 4. Serial monitor
-pio device monitor -d firmware
-```
-
-Requires PlatformIO with the `espressif32` platform; libraries (MPU6050, ArduinoJson, Adafruit GFX/SSD1306) are resolved automatically from `platformio.ini`.
-
-## Repo structure
+## Cấu trúc repo
 
 ```
 firmware/
-├── platformio.ini       # build config + library dependencies
+├── platformio.ini       # cấu hình build + thư viện
 └── src/
-    ├── main.ino         # FreeRTOS: Sensor (100 Hz) / HUD / SMS tasks
-    ├── VapCo.h/.cpp     # SmartHelmetSensor — fall detection state machine
-    ├── HUD.h/.cpp       # OLED display + BLE server + JSON navigation parser
-    └── SmsGps.h/.cpp    # GPS NMEA parsing + SIM A7680C AT commands
-docs/                    # architecture and prototype images
+    ├── main.ino         # FreeRTOS: task Sensor (100 Hz) / HUD / SMS
+    ├── VapCo.h/.cpp     # SmartHelmetSensor — máy trạng thái phát hiện té ngã
+    ├── HUD.h/.cpp       # OLED + BLE server + parser JSON điều hướng
+    └── SmsGps.h/.cpp    # Parse NMEA GPS + lệnh AT SIM A7680C
+docs/                    # ảnh kiến trúc và prototype
 ```
 
-## Results (pilot urban trials, Ho Chi Minh City)
+## Kết quả (thử nghiệm thực tế tại TP. Hồ Chí Minh)
 
-- 35% reduction in eyes-off-road time (ISO 15007 A/B vs. handlebar phone)
-- 8% false-positive rate in fall detection
-- 78% eye-state accuracy at 30 FPS on MaixCAM (YOLOv5n, custom dataset)
-- 12 s end-to-end time-to-notify; 95% SMS delivery at 2-bar coverage
-- 7–9 h battery life; < $85 system cost
+- Giảm 35% thời gian mắt rời đường (giao thức ISO 15007 A/B, so với điện thoại gắn ghi đông)
+- Tỉ lệ báo động giả 8%
+- Độ chính xác nhận trạng thái mắt 78% ở 30 FPS trên MaixCAM (YOLOv5n, dataset tự thu thập)
+- Thời gian từ phát hiện té đến gửi SMS trung bình 12 s; SMS thành công 95% ngay cả vùng sóng yếu
+- Pin 7–9 giờ; tổng chi phí hệ thống dưới 85 USD
 
 ## License
 
-MIT — see [LICENSE](LICENSE).
+MIT — xem [LICENSE](LICENSE).
