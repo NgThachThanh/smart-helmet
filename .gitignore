@@ -1,0 +1,15 @@
+# Paper submission (not public)
+SmartHelmet_Paper_Submission/
+
+# Original firmware workspace
+FINISH2/
+
+# PlatformIO build artifacts
+.pio/
+firmware/.pio/
+*.log
+
+# IDE / OS
+.vscode/
+.idea/
+.DS_Store
